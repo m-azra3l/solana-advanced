@@ -1,0 +1,16 @@
+[features]
+seeds = false
+skip-lint = false
+[programs.localnet]
+diamond_hands = "BftVtkPAbc5gEgAaZ8sgbi2jxPCAjuCJExH2Xia8i62E"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+# cluster = "https://api.devnet.solana.com"
+cluster = "Localnet"
+wallet = "wallet.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
