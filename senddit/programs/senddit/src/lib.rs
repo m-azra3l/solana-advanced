@@ -77,21 +77,27 @@ pub mod senddit {
         Ok(())
     }
 
+    // Initialize comment store: Reset comment store fields and pay fees
     pub fn init_comment_store(ctx: Context<InitCommentStore>) -> Result<()> {
+        // Extract mutable references to accounts
         let senddit: &mut Account<Senddit> = &mut ctx.accounts.senddit;
         let treasury: &mut UncheckedAccount = &mut ctx.accounts.treasury;
         let comment_store: &mut Account<CommentStore> = &mut ctx.accounts.comment_store;
         let authority: &mut Signer = &mut ctx.accounts.authority;
 
+        // Pay fees using payout_fees function (excluding treasury)
         payout_fees(to: treasury, from: authority, senddit, treasury: None);
 
+        // Reset comment store fields
         comment_store.comments = 0;
         comment_store.bump = *ctx.bumps.get(key: "comment_store").unwrap();
 
         Ok(())
     }
 
+    // Post a comment: Store a comment on-chain
     pub fn post_comment(ctx: Context<PostComment>, text: String) -> Result<()> {
+        // Extract mutable references to accounts
         let senddit: &mut Account<Senddit> = &mut ctx.accounts.senddit;
         let treasury: &mut UncheckedAccount = &mut ctx.accounts.treasury;
         let comment_store: &mut Account<CommentStore> = &mut ctx.accounts.comment_store;
@@ -99,9 +105,10 @@ pub mod senddit {
         let authority: &mut Signer = &mut ctx.accounts.authority;
         let commenter_wallet: &mut UncheckedAccount = &mut ctx.accounts.commenter_wallet;
 
+        // Pay fees using payout_fees function (including treasury)
         payout_fees(to: commenter_wallet, from: authority, senddit, treasury: Some(treasury));
 
-        // Make sure comment text is not empty or too large
+        // Check if the comment text is not empty or too large
         if text.len() == 0 {
             return Err(ErrorCode::NoTextSubmitted.into());
         }
@@ -109,8 +116,10 @@ pub mod senddit {
             return Err(ErrorCode::CommentTooLarge.into());
         }
 
+        // Increment comment count, handling overflow/underflow
         comment_store.comments = comment_store.comments.checked_add(1).ok_or(ErrorCode::OverflowUnderflow)?;
 
+        // Set comment fields
         comment.authority = authority.key();
         comment.text = text;
         comment.upvotes = 1;
@@ -119,19 +128,24 @@ pub mod senddit {
         Ok(())
     }
 
+    // Upvote comments: Increment the upvotes count of a comment
     pub fn upvote_comments(ctx: Context<UpvoteComments>, _number: String) -> Result<()> {
+        // Extract mutable references to accounts
         let senddit: &mut Account<Senddit> = &mut ctx.accounts.senddit;
         let treasury: &mut UncheckedAccount = &mut ctx.accounts.treasury;
         let comment: &mut Account<Comment> = &mut ctx.accounts.comment;
         let authority: &mut Signer = &mut ctx.accounts.authority;
         let commenter_wallet: &mut UncheckedAccount = &mut ctx.accounts.commenter_wallet;
 
+        // Pay fees using payout_fees function (including treasury)
         payout_fees(to: commenter_wallet, from: authority, senddit, treasury: Some(treasury));
 
+        // Increment upvotes count of the comment, handling overflow/underflow
         comment.upvotes = comment.upvotes.checked_add(1).ok_or(ErrorCode::OverflowUnderflow)?;
 
         Ok(())
     }
+
 }
 
 // Utils
