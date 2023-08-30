@@ -29,10 +29,6 @@ and install yarn if getting error.
 
 `anchor deploy`
 
-- Test
-
-`anchor test`
-
 ## Author
 
 [Michael](https://github.com/m-azra3l)
