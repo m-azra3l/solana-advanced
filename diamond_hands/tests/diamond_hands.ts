@@ -59,7 +59,7 @@ describe("diamond_hands", () => {
         },
       }),
       (err) => {
-        assert.equal(err.code, "WrongAccount");
+        assert.equal(err.code, "HandsTooWeak");
         return true;
       }
     );
@@ -80,7 +80,7 @@ describe("diamond_hands", () => {
         },
       }),
       (err) => {
-        assert.equal(err.code, "HandsTooWeak");
+        assert.equal(err.code, "WrongAccount");
         return true;
       }
     );
