@@ -1,4 +1,9 @@
 use anchor_lang::prelude::*;
+use solana_program::{
+    program::invoke,
+    system_instruction::transfer,
+    pubkey::Pubkey,
+};
 
 declare_id!("BftVtkPAbc5gEgAaZ8sgbi2jxPCAjuCJExH2Xia8i62E");
 
@@ -12,15 +17,15 @@ pub mod diamond_hands {
         let receiver: &mut UncheckedAccount = &mut ctx.accounts.receiver;
 
         invoke(
-            instruction: &transfer(from_pubkey: &sender.key(), to_pubkey: &bank.key(), lamports: amount), 
-            account_infos: &[sender.to_account_info(), bank.to_account_info]
+            &transfer(&sender.key(), &bank.key(), amount), 
+            &[sender.to_account_info(), bank.to_account_info()]
         )?;
 
         bank.sender = sender.key();
         bank.receiver = receiver.key();
         bank.amount = amount;
         bank.timestamp = timestamp;
-        bank.bump = *ctx.bumps.get(key: "bank").unwrap();
+        bank.bump = *ctx.bumps.get("bank").unwrap();
 
         Ok(())
     }
@@ -34,10 +39,7 @@ pub mod diamond_hands {
         }
 
         **bank.to_account_info().try_borrow_mut_lamports().unwrap() -= bank.amount;
-        ** receiver&mut Signer
-            .to_account_info() AccountInfo
-            .try_borrow_mut_lamports() Result<RefMut<&mut u64>, _>
-            .unwrap() += bank.amount;
+        **receiver.to_account_info().try_borrow_mut_lamports()? += bank.amount;
 
         Ok(())
     }
