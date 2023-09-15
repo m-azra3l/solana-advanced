@@ -1,4 +1,9 @@
 use anchor_lang::prelude::*;
+use solana_program::{
+    program::invoke,
+    system_instruction::transfer,
+    pubkey::Pubkey,
+};
 
 declare_id!("9W3piuLyrABs2mS45xyo9SS3ed5ZyVukjsHzYD6nCh6Y");
 
@@ -22,10 +27,10 @@ pub mod senddit {
         let post_store: &mut Account<PostStore> = &mut ctx.accounts.post_store;
         let authority: &mut Signer = &mut ctx.accounts.authority;
 
-        payout_fees(to: treasury, from: authority, senddit, treasury: None);
+        payout_fees(treasury, authority, senddit, None);
 
         post_store.posts = 0;
-        post_store.bump = *ctx.bumps.get(key: "post_store").unwrap();
+        post_store.bump = *ctx.bumps.get("post_store").unwrap();
 
         Ok(())
     }
@@ -38,7 +43,7 @@ pub mod senddit {
         let authority: &mut Signer = &mut ctx.accounts.authority;
         let poster_wallet: &mut UncheckedAccount = &mut ctx.accounts.poster_wallet;
 
-        payout_fees(to: poster_wallet, from: authority, senddit, treasury: Some(treasury));
+        payout_fees(poster_wallet,authority, senddit, Some(treasury));
 
         // Make sure string is not empty or too large
         if link.len() == 0 {
@@ -48,7 +53,7 @@ pub mod senddit {
             return Err(ErrorCode::LinkTooLarge.into());
         }
 
-        post_store.posts = post_store &mut Account<PostStore>
+        post_store.posts = post_store
             .posts.checked_add(1)
             .ok_or(ErrorCode::OverflowUnderflow)?;
 
@@ -56,7 +61,7 @@ pub mod senddit {
         post.link = link;
         post.upvotes = 1;
         post.comments = 0;
-        post.bump = *ctx.bumps.get(key: "post").unwrap();
+        post.bump = *ctx.bumps.get("post").unwrap();
 
         Ok(())
     }
@@ -68,9 +73,9 @@ pub mod senddit {
         let authority: &mut Signer = &mut ctx.accounts.authority;
         let poster_wallet: &mut UncheckedAccount = &mut ctx.accounts.poster_wallet;
 
-        payout_fees(to: poster_wallet, from: authority, senddit, treasury: Some(treasury));
+        payout_fees(poster_wallet, authority, senddit, Some(treasury));
 
-        post.upvotes = post &mut Account<Post>
+        post.upvotes = post
             .upvotes.checked_add(1)
             .ok_or(ErrorCode::OverflowUnderflow)?;
 
@@ -86,11 +91,11 @@ pub mod senddit {
         let authority: &mut Signer = &mut ctx.accounts.authority;
 
         // Pay fees using payout_fees function (excluding treasury)
-        payout_fees(to: treasury, from: authority, senddit, treasury: None);
+        payout_fees(treasury, authority, senddit,  None);
 
         // Reset comment store fields
         comment_store.comments = 0;
-        comment_store.bump = *ctx.bumps.get(key: "comment_store").unwrap();
+        comment_store.bump = *ctx.bumps.get("comment_store").unwrap();
 
         Ok(())
     }
@@ -106,7 +111,7 @@ pub mod senddit {
         let commenter_wallet: &mut UncheckedAccount = &mut ctx.accounts.commenter_wallet;
 
         // Pay fees using payout_fees function (including treasury)
-        payout_fees(to: commenter_wallet, from: authority, senddit, treasury: Some(treasury));
+        payout_fees(commenter_wallet, authority, senddit, Some(treasury));
 
         // Check if the comment text is not empty or too large
         if text.len() == 0 {
@@ -123,7 +128,7 @@ pub mod senddit {
         comment.authority = authority.key();
         comment.text = text;
         comment.upvotes = 1;
-        comment.bump = *ctx.bumps.get(key: "comment").unwrap();
+        comment.bump = *ctx.bumps.get("comment").unwrap();
 
         Ok(())
     }
@@ -138,7 +143,7 @@ pub mod senddit {
         let commenter_wallet: &mut UncheckedAccount = &mut ctx.accounts.commenter_wallet;
 
         // Pay fees using payout_fees function (including treasury)
-        payout_fees(to: commenter_wallet, from: authority, senddit, treasury: Some(treasury));
+        payout_fees(commenter_wallet, authority, senddit, Some(treasury));
 
         // Increment upvotes count of the comment, handling overflow/underflow
         comment.upvotes = comment.upvotes.checked_add(1).ok_or(ErrorCode::OverflowUnderflow)?;
@@ -157,18 +162,18 @@ pub fn payout_fees<'info>(
     treasury: Option<&mut UncheckedAccount<'info>>
 ) {
     // first transfer money to the platform
-    if let Some(treasury: &mut UncheckedAccount) = treasury {
+    if let Some(treasury) = treasury {
         invoke(
-            instruction: &transfer(from_pubkey: from.key, to_pubkey: treasury.key, lamports: senddit.fee),
-            account_infos: &[from.to_account_info(), treasury.to_account_info()]
-        ) Result<(), ProgramError>
+            &transfer(from.key, treasury.key, senddit.fee),
+            &[from.to_account_info(), treasury.to_account_info()],
+        )
         .unwrap();
     }
     // then transfer money to the user who posted
     invoke(
-        instruction: &transfer(from_pubkey: from.key, to_pubkey: treasury.key, lamports: senddit.fee),
-        account_infos: &[from.to_account_info(), treasury.to_account_info()]
-    ) Result<(), ProgramError>
+        &transfer(from.key, to.key, senddit.fee),
+        &[from.to_account_info(), to.to_account_info()],
+    )
     .unwrap();
 }
 
@@ -176,7 +181,7 @@ pub fn payout_fees<'info>(
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, seeds = [b"senddit".as_ref()], bump, payer, = authority, space = Senddit::LEN)]
+    #[account(init, seeds = [b"senddit".as_ref()], bump, payer = authority, space = Senddit::LEN)]
     pub senddit: Account<'info, Senddit>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -212,7 +217,7 @@ pub struct PostLink<'info> {
     pub poster_wallet: UncheckedAccount<'info>,
     #[account(mut,seeds =[(((Clock::get().unwrap().unix_timestamp.abs() as f64) / (60.0 * 60.0 * 24.0)) as u128).to_string().as_bytes().as_ref()], bump = post_store.bump)]
     pub post_store: Account<'info, PostStore>,
-    #[account(init, seeds = [post_store.key().as_ref, (post_store.posts + 1).to_string().as_bytes().as_ref()], bump, payer = authority, space = Post::LEN)]
+    #[account(init, seeds = [post_store.key().as_ref(), (post_store.posts + 1).to_string().as_bytes().as_ref()], bump, payer = authority, space = Post::LEN)]
     pub post: Account<'info, Post>,
     /// CHECK: It's okay not to deserialize this, its just to prevent duplicate links
     #[account(init, seeds = [link.as_bytes().as_ref()], bump, payer = authority, space = 8)]
@@ -257,7 +262,7 @@ pub struct InitCommentStore<'info> {
 
 #[derive(Accounts)]
 pub struct PostComment<'info> {
-    #[account(mut, seed = [b"senddit".as_ref()], bump = senddit.bump)]
+    #[account(mut, seeds = [b"senddit".as_ref()], bump = senddit.bump)]
     pub senddit: Account<'info, Senddit>,
     /// CHECK: Account must match our config
     #[account(mut, address = senddit.treasury)]
@@ -289,11 +294,11 @@ pub struct UpvoteComments<'info> {
     /// CHECK: Account must match the maker of the comments
     #[account(mut, address = comment.authority)]
     pub commenter_wallet: UncheckedAccount<'info>,
-    #[account(mut, seeds [post.key().as_ref()], bump = comment_store.bump)]
+    #[account(mut, seeds = [post.key().as_ref()], bump = comment_store.bump)]
     pub comment_store: Account<'info, CommentStore>,
     #[account(mut)]
     pub post: Account<'info, Post>,
-    #[account(mut, seeds = [comment_store.key().as_ref(), number.as_bytes().as_ref], bump = comment.bump)]
+    #[account(mut, seeds = [comment_store.key().as_ref(), number.as_bytes().as_ref()], bump = comment.bump)]
     pub comment: Account<'info, Comment>,
     pub system_program: Program<'info, System>
 }
