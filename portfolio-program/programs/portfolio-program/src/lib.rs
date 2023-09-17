@@ -65,24 +65,54 @@ pub mod portfolio_program {
     }
 
     // Approve a vouch for the portfolio
+    // pub fn approve_vouch(ctx: Context<ApproveVouch>, vouch_user: Pubkey) -> Result<()> {
+    //     // Access control check: Only owner can approve vouch
+    //     if *ctx.accounts.authority.key != ctx.accounts.portfolio.owner {
+    //         return Err(ErrorCode::Unauthorized.into());
+    //     }
+    //     // Extract mutable reference to the portfolio account
+    //     let portfolio = &mut ctx.accounts.portfolio;
+    //     // Find the vouch request and approve it
+    //     if let Some(vouch_request) = portfolio.vouch_requests.iter_mut().find(|v| v.vouched_by == vouch_user) {
+    //         vouch_request.is_approved = true;
+    //         // Add the vouch to the portfolio's list of vouches
+    //         portfolio.vouches.push(Vouch {
+    //             vouched_by: vouch_request.vouched_by,
+    //             comment: vouch_request.comment.clone(),
+    //         });
+    //     }
+    //     Ok(())
+    // }
+
     pub fn approve_vouch(ctx: Context<ApproveVouch>, vouch_user: Pubkey) -> Result<()> {
         // Access control check: Only owner can approve vouch
         if *ctx.accounts.authority.key != ctx.accounts.portfolio.owner {
             return Err(ErrorCode::Unauthorized.into());
         }
-        // Extract mutable reference to the portfolio account
-        let portfolio = &mut ctx.accounts.portfolio;
-        // Find the vouch request and approve it
-        if let Some(vouch_request) = portfolio.vouch_requests.iter_mut().find(|v| v.vouched_by == vouch_user) {
-            vouch_request.is_approved = true;
-            // Add the vouch to the portfolio's list of vouches
+    
+        // Define a variable `vouch_request` using a closure, which finds a vouch request
+        // from the list of vouch requests in the portfolio that matches the vouched user.
+        let vouch_request = {
+            let portfolio = &mut ctx.accounts.portfolio;
+            portfolio.vouch_requests.iter().find(|v| v.vouched_by == vouch_user).cloned()
+        };
+
+        // Check if a vouch request was found.
+        if let Some(vouch_request) = vouch_request {
+            let portfolio = &mut ctx.accounts.portfolio;
+
+            // If a vouch request was found, add a new Vouch to the list of vouches in the portfolio.
             portfolio.vouches.push(Vouch {
                 vouched_by: vouch_request.vouched_by,
                 comment: vouch_request.comment.clone(),
             });
         }
+
+    
         Ok(())
     }
+    
+    
 
     // Send a message to the portfolio owner
     pub fn send_message(ctx: Context<SendMessage>, content: String) -> Result<()> {
@@ -113,9 +143,11 @@ pub mod portfolio_program {
 pub struct Initialize<'info> {
     #[account(init, seeds = [b"portfolio".as_ref()], bump, payer = authority, space = Portfolio::LEN)]
     pub portfolio: Account<'info, Portfolio>,
+    #[account(mut)] // Add this line to make the authority account mutable
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
+
 
 // CreatePortfolio account: Updates the bio of the portfolio
 #[derive(Accounts)]
@@ -184,6 +216,11 @@ pub struct Tip<'info> {
 
 // Define custom data structure
 
+const DISCRIMINATOR: usize = 8;
+const PUBKEY: usize = 32;
+const UNSIGNED_64: usize = 8;
+const BUMP: usize = 1;
+
 // Portfolio data structure
 #[account]
 pub struct Portfolio {
@@ -195,6 +232,11 @@ pub struct Portfolio {
     pub vouch_requests: Vec<VouchRequest>,   // A vector to store vouch requests
     pub messages: Vec<Message>,   // A vector to store messages
     pub tip_amount: u64,
+    pub bump: u8
+}
+
+impl Portfolio{
+    pub const LEN: usize = DISCRIMINATOR + PUBKEY + PUBKEY + UNSIGNED_64 + BUMP;
 }
 
 // Vouch data structure
@@ -209,7 +251,7 @@ pub struct Vouch {
 pub struct VouchRequest {
     pub vouched_by: Pubkey,
     pub comment: String,
-    pub is_approved: bool,
+    // pub is_approved: bool,
 }
 
 // Message data structure
@@ -220,7 +262,7 @@ pub struct Message {
 }
 
 // Error codes
-#[error]
+#[error_code]
 pub enum ErrorCode {
     Unauthorized,
 }
