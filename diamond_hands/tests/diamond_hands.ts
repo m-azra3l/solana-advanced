@@ -1,5 +1,7 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+// import * as anchor from "@coral-xyz/anchor";
+// import { Program} from "@coral-xyz/anchor";
+import * as anchor from "@project-serum/anchor";
+import { Program } from "@project-serum/anchor";
 import { DiamondHands } from "../target/types/diamond_hands";
 import { PublicKey, Keypair } from "@solana/web3.js";
 import assert from "assert";
@@ -10,6 +12,8 @@ describe("diamond_hands", () => {
 
   // Access the DiamondHands program
   const program = anchor.workspace.DiamondHands as Program<DiamondHands>;
+  
+  const provider = anchor.AnchorProvider.env()
 
   // Create keypairs for sender and receiver
   const sender = Keypair.generate();
@@ -17,21 +21,22 @@ describe("diamond_hands", () => {
   const wrongUser = Keypair.generate(); // Wrong user's keypair
 
   let bankAccount: PublicKey;
-
+  
   // Test case: Should create a bank account
   it("Should create a bank account", async () => {
-    const timestamp = Math.floor(Date.now() / 1000) + 1000; // Timelock 1000 seconds in the future
-    const amount = 1000; // Amount to be deposited
+    const timestamp = new anchor.BN(Date.now() / 1000 + 1000); // Timelock 1000 seconds in the future
+    const amount = new anchor.BN(1000); // Amount to be deposited
 
     await program.rpc.createBank(timestamp, amount, {
       accounts: {
         bank: sender.publicKey,
-        sender: program.provider.wallet.publicKey,
+        sender: sender.publicKey,
         receiver: receiver.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       },
       signers: [sender, receiver],
     });
+ 
 
     // Fetch bank account details
     const bank = await program.account.bank.fetch(sender.publicKey);
@@ -40,13 +45,13 @@ describe("diamond_hands", () => {
     // Assertion checks
     assert.equal(bank.sender.toString(), sender.publicKey.toString());
     assert.equal(bank.receiver.toString(), receiver.publicKey.toString());
-    assert.equal(bank.amount, amount);
-    assert.equal(bank.timestamp, timestamp);
+    assert.equal(bank.amount.toNumber(), amount.toNumber());
+    assert.equal(bank.timestamp.toNumber(), timestamp.toNumber()); 
   });
 
   // Test case: Should fail to withdraw before timelock
   it("Should fail to withdraw before timelock", async () => {
-    const timestamp = Math.floor(Date.now() / 1000) + 500; // Timelock 500 seconds in the future
+    const timestamp = new anchor.BN(Math.floor(Date.now() / 1000) + 500); // Timelock 500 seconds in the future
 
     // Expect rejection with specific error code
     await assert.rejects(
@@ -58,8 +63,8 @@ describe("diamond_hands", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
         },
       }),
-      (err) => {
-        assert.equal(err.code, "HandsTooWeak");
+      (err: Error) => {
+        assert.equal(err.message, "HandsTooWeak");
         return true;
       }
     );
@@ -67,7 +72,7 @@ describe("diamond_hands", () => {
 
   // Test case: Should fail for wrong user to withdraw
   it("Should fail for wrong user to withdraw", async () => {
-    const timestamp = Math.floor(Date.now() / 1000) - 500; // Timelock expired 500 seconds ago
+    const timestamp = new anchor.BN(Math.floor(Date.now() / 1000) - 500); // Timelock expired 500 seconds ago
 
     // Expect rejection with specific error code
     await assert.rejects(
@@ -79,8 +84,8 @@ describe("diamond_hands", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
         },
       }),
-      (err) => {
-        assert.equal(err.code, "WrongAccount");
+      (err: Error) => {
+        assert.equal(err.message, "WrongAccount");
         return true;
       }
     );
@@ -88,7 +93,7 @@ describe("diamond_hands", () => {
 
   // Test case: Should withdraw after timelock
   it("Should withdraw after timelock", async () => {
-    const timestamp = Math.floor(Date.now() / 1000) - 500; // Timelock expired 500 seconds ago
+    const timestamp = new anchor.BN(Math.floor(Date.now() / 1000) - 500); // Timelock expired 500 seconds ago
 
     // Get sender and receiver's balance before withdrawal
     const senderLamportsBefore = await program.provider.connection.getBalance(sender.publicKey);
@@ -112,8 +117,8 @@ describe("diamond_hands", () => {
     const bank = await program.account.bank.fetch(sender.publicKey);
 
     // Assertion checks
-    assert.equal(senderLamportsAfter, senderLamportsBefore - bank.amount);
-    assert.equal(receiverLamportsAfter, receiverLamportsBefore + bank.amount);
-    assert.equal(bank.amount, 1000); // Assuming bank.amount is 1000
+    assert.equal(senderLamportsAfter, senderLamportsBefore - bank.amount.toNumber());
+    assert.equal(receiverLamportsAfter, receiverLamportsBefore + bank.amount.toNumber());
+    assert.equal(bank.amount.toNumber(), 1000); // Assuming bank.amount is 1000
   });
 });

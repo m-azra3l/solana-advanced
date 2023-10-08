@@ -251,7 +251,6 @@ pub struct Vouch {
 pub struct VouchRequest {
     pub vouched_by: Pubkey,
     pub comment: String,
-    // pub is_approved: bool,
 }
 
 // Message data structure
